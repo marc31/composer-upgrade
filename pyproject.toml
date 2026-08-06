@@ -22,9 +22,9 @@ classifiers = [
 dependencies = ["rich>=13.7"]
 
 [project.urls]
-Documentation = "https://github.com/your-org/composer-upgrade#readme"
-Repository = "https://github.com/your-org/composer-upgrade"
-Issues = "https://github.com/your-org/composer-upgrade/issues"
+Documentation = "https://github.com/marc31/composer-upgrade#readme"
+Repository = "https://github.com/marc31/composer-upgrade"
+Issues = "https://github.com/marc31/composer-upgrade/issues"
 
 [project.scripts]
 composer-upgrade = "composer_upgrade.cli:main"

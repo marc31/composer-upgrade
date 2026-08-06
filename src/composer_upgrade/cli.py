@@ -7,6 +7,7 @@ import fnmatch
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import quote
 
 from rich.console import Console
 from rich.prompt import Confirm, Prompt
@@ -73,6 +74,36 @@ def _age(release: Release) -> str:
     return f"{(datetime.now(UTC) - release.published_at).days}d"
 
 
+def forge_links(package: Package) -> tuple[str | None, str | None]:
+    """Build release and comparison links for the selected version."""
+    if not package.repository or not package.selected_version:
+        return None, None
+    repository = package.repository.removesuffix(".git")
+    if repository.startswith(("https://", "http://")):
+        repository = repository.split("://", 1)[1]
+    elif repository.startswith("git@"):
+        repository = repository.removeprefix("git@").replace(":", "/", 1)
+    host, _, project = repository.partition("/")
+    if not project:
+        return None, None
+    installed = quote(package.installed, safe="")
+    selected = quote(package.selected_version, safe="")
+    if host == "github.com":
+        root = f"https://github.com/{project}"
+        return f"{root}/releases/tag/{selected}", f"{root}/compare/{installed}...{selected}"
+    if host == "gitlab.com":
+        root = f"https://gitlab.com/{project}"
+        return f"{root}/-/releases/{selected}", f"{root}/-/compare?from={installed}&to={selected}"
+    if host == "bitbucket.org":
+        root = f"https://bitbucket.org/{project}"
+        return None, f"{root}/branches/compare/{selected}..{installed}"
+    return None, None
+
+
+def _link(url: str | None, label: str) -> str:
+    return f"[link={url}]{label}[/link]" if url else "-"
+
+
 def print_packages(console: Console, packages: list[Package]) -> None:
     table = Table(title="Composer updates")
     table.add_column("#", justify="right")
@@ -82,11 +113,14 @@ def print_packages(console: Console, packages: list[Package]) -> None:
     table.add_column("PACKAGE")
     table.add_column("INSTALLED")
     table.add_column("SELECTED")
+    table.add_column("CHANGELOG")
+    table.add_column("DIFF")
     for index, package in enumerate(packages, start=1):
         release = next(
             (item for item in package.releases if item.version == package.selected_version), None
         )
         kind = update_type(package.installed, package.selected_version or package.latest)
+        changelog, diff = forge_links(package)
         table.add_row(
             str(index),
             kind.value,
@@ -95,6 +129,8 @@ def print_packages(console: Console, packages: list[Package]) -> None:
             package.name,
             package.installed,
             package.selected_version or "-",
+            _link(changelog, "release"),
+            _link(diff, "compare"),
         )
     console.print(table)
 
@@ -112,7 +148,7 @@ def show_package(
     table.add_column("AGE")
     table.add_column("TYPE")
     table.add_column("ELIGIBLE")
-    for release in package.releases:
+    for release in _releases_since_installed(package.releases, package.installed):
         kind = update_type(package.installed, release.version)
         allowed = kind != UpdateType.MAJOR or allow_major
         table.add_row(
@@ -153,6 +189,17 @@ def _releases_between(
     ]
 
 
+def _releases_since_installed(releases: list[Release], installed: str) -> list[Release]:
+    installed_version = parse_version(installed)
+    if installed_version is None:
+        return releases
+    return [
+        release
+        for release in releases
+        if (version := parse_version(release.version)) is not None and version >= installed_version
+    ]
+
+
 def _select_packages(
     console: Console, packages: list[Package], allow_major: bool, release_service: ReleaseService
 ) -> None:
@@ -171,6 +218,7 @@ def _select_packages(
             package = packages[index]
             if parts[0] == "info":
                 show_package(console, package, allow_major, release_service)
+                print_packages(console, packages)
                 continue
             choices = [
                 release.version
@@ -184,6 +232,7 @@ def _select_packages(
                 package.selected_version = selected
             else:
                 console.print("Use --major to select a major release.", style="yellow")
+            print_packages(console, packages)
             continue
         indexes = [int(value) - 1 for value in answer.split(",") if value.strip().isdigit()]
         for index in indexes:
@@ -233,24 +282,29 @@ def main(argv: list[str] | None = None) -> int:
     if not packages:
         console.print("No eligible updates found.")
         return 0
-    print_packages(console, packages)
-    if not args.no_interaction:
+    if args.no_interaction:
+        print_packages(console, packages)
+        _print_plan(console, client, build_plan(packages, args.with_all_dependencies, args.dry_run))
+        return 0
+
+    while True:
+        print_packages(console, packages)
         _select_packages(console, packages, args.major, releases)
-    commands = build_plan(packages, args.with_all_dependencies, args.dry_run)
-    _print_plan(console, client, commands)
-    if args.no_interaction or not commands:
+        commands = build_plan(packages, args.with_all_dependencies, args.dry_run)
+        _print_plan(console, client, commands)
+        if not commands:
+            return 0
+        if not Confirm.ask("Execute this plan?", default=False):
+            console.print("Plan not executed. Your selections are preserved.", style="yellow")
+            continue
+        try:
+            for command in commands:
+                result = client.execute(command, directory)
+                console.print(result.stdout)
+        except ComposerError as error:
+            console.print(f"Composer failed: {error}", style="red")
+            return 1
         return 0
-    if not Confirm.ask("Execute this plan?", default=False):
-        console.print("Cancelled.")
-        return 0
-    try:
-        for command in commands:
-            result = client.execute(command, directory)
-            console.print(result.stdout)
-    except ComposerError as error:
-        console.print(f"Composer failed: {error}", style="red")
-        return 1
-    return 0
 
 
 if __name__ == "__main__":

@@ -17,6 +17,13 @@ uv run composer-upgrade
 ```
 
 Run the command from a Composer project containing both `composer.json` and `composer.lock`.
+When the tool lives in another directory, keep the Composer project as the current directory and
+point uv at the tool project:
+
+```bash
+cd /path/to/composer-project
+uv --project /path/to/composer-upgrade run composer-upgrade --direct --dry-run
+```
 
 ## Usage
 
