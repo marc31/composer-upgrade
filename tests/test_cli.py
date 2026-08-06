@@ -1,4 +1,4 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -8,7 +8,6 @@ from composer_upgrade.cli import (
     _releases_between,
     _releases_since_installed,
     choose_default,
-    eligible_releases,
     forge_links,
 )
 from composer_upgrade.models import Package, Release, RequirementGroup
@@ -18,15 +17,9 @@ def package() -> Package:
     return Package("vendor/package", "1.0.0", "1.2.0", "^1", RequirementGroup.REQUIRE)
 
 
-def test_release_age_filter_keeps_old_release() -> None:
-    now = datetime(2026, 8, 6, tzinfo=UTC)
-    item = package()
-    item.releases = [
-        Release("1.2.0", now - timedelta(days=1)),
-        Release("1.1.0", now - timedelta(days=7)),
-    ]
-
-    assert [release.version for release in eligible_releases(item, 3, [], now)] == ["1.1.0"]
+def test_direct_dependencies_are_the_default_and_can_be_disabled() -> None:
+    assert cli.parser().parse_args([]).direct is True
+    assert cli.parser().parse_args(["--no-direct"]).direct is False
 
 
 def test_dry_run_is_not_a_command_line_option() -> None:
@@ -37,6 +30,14 @@ def test_dry_run_is_not_a_command_line_option() -> None:
 def test_with_all_dependencies_is_not_a_command_line_option() -> None:
     with pytest.raises(SystemExit):
         cli.parser().parse_args(["--with-all-dependencies"])
+
+
+@pytest.mark.parametrize(
+    "option", ["--direct", "--min-release-age", "--minimum-release-age-exclude", "--no-interaction"]
+)
+def test_removed_command_line_options_are_rejected(option: str) -> None:
+    with pytest.raises(SystemExit):
+        cli.parser().parse_args([option])
 
 
 def test_dry_run_reopens_the_tui_with_its_output(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -116,14 +117,6 @@ def test_dry_run_failure_reopens_the_tui(monkeypatch: pytest.MonkeyPatch) -> Non
 
     assert cli.main([]) == 0
     assert calls == [None, "Dry run failed:\nDocker is unavailable"]
-
-
-def test_exclusion_bypasses_release_age_filter() -> None:
-    now = datetime(2026, 8, 6, tzinfo=UTC)
-    item = package()
-    item.releases = [Release("1.2.0", now - timedelta(days=1))]
-
-    assert eligible_releases(item, 3, ["vendor/*"], now) == item.releases
 
 
 def test_major_is_not_selected_without_flag() -> None:

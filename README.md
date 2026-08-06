@@ -22,18 +22,18 @@ point uv at the tool project:
 
 ```bash
 cd /path/to/composer-project
-uv --project /path/to/composer-upgrade run composer-upgrade --direct
+uv --project /path/to/composer-upgrade run composer-upgrade
 ```
 
 ## Usage
 
 ```bash
-composer-upgrade --direct --min-release-age 7 --major
+composer-upgrade --major
+composer-upgrade --no-direct
 composer-upgrade --composer-command './vendor/bin/sail composer'
-composer-upgrade --no-interaction
 ```
 
-Use `--major` to show and select major upgrades. Without it, major releases remain hidden and cannot be selected.
+By default, only direct dependencies are shown. Use `--no-direct` to include transitive dependencies. Use `--major` to show and select major upgrades. Without it, major releases remain hidden and cannot be selected.
 
 The main view is a Textual keyboard interface:
 
@@ -42,8 +42,6 @@ The main view is a Textual keyboard interface:
 - The version picker includes a changelog URL and a comparison URL for every candidate release.
 - `s` opens the generated Composer commands in a separate plan window; `x` requests execution, `d` requests a Composer dry run, `w` toggles Composer's `--with-all-dependencies`, and `q` requests exit. Both execution actions require confirmation. After a dry run, its Composer output is shown over the main table; press `q` to close it and run the real plan with `x` if desired. In the exit confirmation, press `q`, Enter, or `y` to quit, and `n` to cancel.
 - In any secondary window, `q` closes only that window. Switching with `i` or `v` replaces the current secondary window, so one `q` returns to the main table.
-
-`--no-interaction` prints the report and plan but never runs Composer. `--minimum-release-age-exclude` accepts a package glob and can be repeated.
 
 Press `w` in the table to toggle Composer's `--with-all-dependencies` flag for generated commands. Its enabled or disabled state is shown in the plan, execution confirmation, and dry-run result. It can update transitive dependencies as needed to resolve the selected upgrades, so inspect the plan before confirming execution.
 

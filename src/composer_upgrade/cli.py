@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import fnmatch
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -18,33 +17,16 @@ from .versions import parse_version, update_type
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description="Interactively upgrade Composer dependencies.")
-    result.add_argument("--direct", action="store_true", help="Only inspect direct dependencies.")
+    result.add_argument(
+        "--no-direct",
+        action="store_false",
+        dest="direct",
+        default=True,
+        help="Inspect direct and transitive dependencies.",
+    )
     result.add_argument("--composer-command", default="composer", help="Composer command to run.")
-    result.add_argument("--min-release-age", type=int, default=0, metavar="DAYS")
-    result.add_argument(
-        "--minimum-release-age-exclude", action="append", default=[], metavar="PATTERN"
-    )
     result.add_argument("--major", action="store_true", help="Show and allow major upgrades.")
-    result.add_argument(
-        "--no-interaction", action="store_true", help="Print a plan but never execute it."
-    )
     return result
-
-
-def eligible_releases(
-    package: Package, minimum_age: int, exclusions: list[str], now: datetime | None = None
-) -> list[Release]:
-    if any(fnmatch.fnmatchcase(package.name, pattern) for pattern in exclusions):
-        return package.releases
-    now = now or datetime.now(UTC)
-    eligible: list[Release] = []
-    for release in package.releases:
-        if release.published_at is None:
-            continue
-        age = (now - release.published_at).days
-        if age >= minimum_age:
-            eligible.append(release)
-    return eligible
 
 
 def choose_default(package: Package, releases: list[Release], allow_major: bool) -> str | None:
@@ -255,8 +237,6 @@ def _print_plan(_: object, client: ComposerClient, commands: list) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
-    if args.min_release_age < 0:
-        parser().error("--min-release-age must be positive")
     console = None
     directory = Path.cwd()
     try:
@@ -271,25 +251,15 @@ def main(argv: list[str] | None = None) -> int:
     for package in packages:
         try:
             package.releases = releases.packagist(package.name)
-            package.releases = eligible_releases(
-                package,
-                args.min_release_age,
-                args.minimum_release_age_exclude,
-            )
         except HttpError as error:
             print(f"Warning for {package.name}: {error}", file=sys.stderr)
         package.suggested_version = choose_default(package, package.releases, args.major)
-        package.selected_version = package.suggested_version if args.no_interaction else None
+        package.selected_version = None
 
     packages = [package for package in packages if package.suggested_version]
     if not packages:
         print("No eligible updates found.")
         return 0
-    if args.no_interaction:
-        print_packages(console, packages)
-        _print_plan(console, client, build_plan(packages, False, False))
-        return 0
-
     if sys.stdin.isatty():
         dry_run_result: str | None = None
         with_all_dependencies = False

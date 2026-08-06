@@ -10,6 +10,7 @@ Use `uv` from the repository root. Run `uv run ruff format`, `uv run ruff check`
 ## Safety and Composer
 
 - Keep Composer invocation as an argument list parsed with `shlex.split`; never invoke it through a shell.
+- Keep Composer discovery on direct dependencies by default. `--no-direct` is the only CLI switch for expanding discovery to transitive dependencies.
 - Preserve the pre-execution plan and explicit confirmation for every mutating Composer command.
 - Treat Composer as the authority for dependency resolution. Keep version parsing limited to display, filtering, and update classification.
 - Keep major releases hidden and unselectable unless `--major` is present.
