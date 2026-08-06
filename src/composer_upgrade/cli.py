@@ -1,4 +1,4 @@
-"""Command-line entry point and Rich-based interaction."""
+"""Command-line entry point and interaction fallback."""
 
 from __future__ import annotations
 
@@ -7,14 +7,10 @@ import fnmatch
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from urllib.parse import quote
-
-from rich.console import Console
-from rich.prompt import Confirm, Prompt
-from rich.table import Table
 
 from .composer import ComposerClient, ComposerError, build_plan
 from .http import HttpError
+from .links import forge_links
 from .models import Package, Release, UpdateType
 from .releases import ReleaseService
 from .versions import parse_version, update_type
@@ -29,12 +25,8 @@ def parser() -> argparse.ArgumentParser:
         "--minimum-release-age-exclude", action="append", default=[], metavar="PATTERN"
     )
     result.add_argument("--major", action="store_true", help="Show and allow major upgrades.")
-    result.add_argument("--dry-run", action="store_true", help="Pass --dry-run to Composer.")
     result.add_argument(
         "--no-interaction", action="store_true", help="Print a plan but never execute it."
-    )
-    result.add_argument(
-        "--with-all-dependencies", action="store_true", help="Pass --with-all-dependencies."
     )
     return result
 
@@ -74,93 +66,82 @@ def _age(release: Release) -> str:
     return f"{(datetime.now(UTC) - release.published_at).days}d"
 
 
-def forge_links(package: Package) -> tuple[str | None, str | None]:
-    """Build release and comparison links for the selected version."""
-    if not package.repository or not package.selected_version:
-        return None, None
-    repository = package.repository.removesuffix(".git")
-    if repository.startswith(("https://", "http://")):
-        repository = repository.split("://", 1)[1]
-    elif repository.startswith("git@"):
-        repository = repository.removeprefix("git@").replace(":", "/", 1)
-    host, _, project = repository.partition("/")
-    if not project:
-        return None, None
-    installed = quote(package.installed, safe="")
-    selected = quote(package.selected_version, safe="")
-    if host == "github.com":
-        root = f"https://github.com/{project}"
-        return f"{root}/releases/tag/{selected}", f"{root}/compare/{installed}...{selected}"
-    if host == "gitlab.com":
-        root = f"https://gitlab.com/{project}"
-        return f"{root}/-/releases/{selected}", f"{root}/-/compare?from={installed}&to={selected}"
-    if host == "bitbucket.org":
-        root = f"https://bitbucket.org/{project}"
-        return None, f"{root}/branches/compare/{selected}..{installed}"
-    return None, None
-
-
 def _link(url: str | None, label: str) -> str:
-    return f"[link={url}]{label}[/link]" if url else "-"
+    return f"{label}: {url}" if url else "-"
 
 
-def print_packages(console: Console, packages: list[Package]) -> None:
-    table = Table(title="Composer updates")
-    table.add_column("#", justify="right")
-    table.add_column("TYPE")
-    table.add_column("NEW")
-    table.add_column("AGE")
-    table.add_column("PACKAGE")
-    table.add_column("INSTALLED")
-    table.add_column("SELECTED")
-    table.add_column("CHANGELOG")
-    table.add_column("DIFF")
+def print_packages(_: object, packages: list[Package]) -> None:
+    headers = [
+        "#",
+        "TYPE",
+        "NEW",
+        "AGE",
+        "PACKAGE",
+        "INSTALLED",
+        "ELIGIBLE",
+        "SELECTED",
+        "CHANGELOG",
+        "DIFF",
+    ]
+    rows: list[list[str]] = []
     for index, package in enumerate(packages, start=1):
         release = next(
             (item for item in package.releases if item.version == package.selected_version), None
         )
         kind = update_type(package.installed, package.selected_version or package.latest)
         changelog, diff = forge_links(package)
-        table.add_row(
-            str(index),
-            kind.value,
-            "NEW" if release and _age(release) == "0d" else "",
-            _age(release) if release else "unknown",
-            package.name,
-            package.installed,
-            package.selected_version or "-",
-            _link(changelog, "release"),
-            _link(diff, "compare"),
+        rows.append(
+            [
+                str(index),
+                kind.value,
+                "NEW" if release and _age(release) == "0d" else "",
+                _age(release) if release else "unknown",
+                package.name,
+                package.installed,
+                package.suggested_version or "-",
+                package.selected_version or "-",
+                _link(changelog, "release"),
+                _link(diff, "compare"),
+            ]
         )
-    console.print(table)
+    widths = [
+        max(len(header), *(len(row[index]) for row in rows)) for index, header in enumerate(headers)
+    ]
+    print(" | ".join(header.ljust(widths[index]) for index, header in enumerate(headers)))
+    print("-+-".join("-" * width for width in widths))
+    for row in rows:
+        print(" | ".join(value.ljust(widths[index]) for index, value in enumerate(row)))
 
 
 def show_package(
-    console: Console, package: Package, allow_major: bool, release_service: ReleaseService
+    _: object, package: Package, allow_major: bool, release_service: ReleaseService
 ) -> None:
-    console.print(
-        f"\n[bold]{package.name}[/bold] {package.installed} "
-        f"({package.constraint or 'no root constraint'})"
-    )
-    table = Table()
-    table.add_column("VERSION")
-    table.add_column("DATE")
-    table.add_column("AGE")
-    table.add_column("TYPE")
-    table.add_column("ELIGIBLE")
+    print(package_info_view(package, allow_major, release_service))
+
+
+def package_info_view(package: Package, allow_major: bool, release_service: ReleaseService) -> str:
+    lines = [
+        package.name,
+        f"Installed: {package.installed}",
+        f"Constraint: {package.constraint or 'no root constraint'}",
+        "VERSION | DATE | AGE | TYPE | ELIGIBLE",
+    ]
     for release in _releases_since_installed(package.releases, package.installed):
         kind = update_type(package.installed, release.version)
         allowed = kind != UpdateType.MAJOR or allow_major
-        table.add_row(
-            release.version,
-            str(release.published_at or "unknown"),
-            _age(release),
-            kind.value,
-            "yes" if allowed else "no",
+        lines.append(
+            " | ".join(
+                [
+                    release.version,
+                    str(release.published_at or "unknown"),
+                    _age(release),
+                    kind.value,
+                    "yes" if allowed else "no",
+                ]
+            )
         )
-    console.print(table)
     if package.repository:
-        console.print(f"Repository: {package.repository}")
+        lines.append(f"Repository: {package.repository}")
         try:
             notes = _releases_between(
                 release_service.changelog(package.repository),
@@ -169,11 +150,10 @@ def show_package(
             )
             for release in notes:
                 if release.notes:
-                    console.print(
-                        f"\n[bold]{release.version}[/bold] {release.url or ''}\n{release.notes}"
-                    )
+                    lines.extend([f"{release.version} {release.url or ''}", release.notes])
         except HttpError as error:
-            console.print(f"Changelog unavailable: {error}", style="yellow")
+            lines.append(f"Changelog unavailable: {error}")
+    return "\n".join(lines)
 
 
 def _releases_between(
@@ -200,20 +180,18 @@ def _releases_since_installed(releases: list[Release], installed: str) -> list[R
     ]
 
 
-def _select_packages(
-    console: Console, packages: list[Package], allow_major: bool, release_service: ReleaseService
+def _select_packages_with_prompts(
+    console: object, packages: list[Package], allow_major: bool, release_service: ReleaseService
 ) -> None:
     while True:
-        answer = Prompt.ask(
-            "Select numbers, `info N`, `version N`, or Enter to continue", default=""
-        ).strip()
+        answer = input("Select numbers, `info N`, `version N`, or Enter to continue: ").strip()
         if not answer:
             return
         parts = answer.split()
         if len(parts) == 2 and parts[0] in {"info", "version"} and parts[1].isdigit():
             index = int(parts[1]) - 1
             if not 0 <= index < len(packages):
-                console.print("Unknown package number.", style="red")
+                print("Unknown package number.")
                 continue
             package = packages[index]
             if parts[0] == "info":
@@ -225,44 +203,68 @@ def _select_packages(
                 for release in package.releases
                 if update_type(package.installed, release.version) != UpdateType.UNKNOWN
             ]
-            selected = Prompt.ask(
-                "Version", choices=choices, default=package.selected_version or choices[0]
+            selected = input(f"Version ({', '.join(choices)}): ").strip() or (
+                package.selected_version or choices[0]
             )
             if update_type(package.installed, selected) != UpdateType.MAJOR or allow_major:
                 package.selected_version = selected
             else:
-                console.print("Use --major to select a major release.", style="yellow")
+                print("Use --major to select a major release.")
             print_packages(console, packages)
             continue
         indexes = [int(value) - 1 for value in answer.split(",") if value.strip().isdigit()]
         for index in indexes:
             if 0 <= index < len(packages):
                 packages[index].selected_version = (
-                    packages[index].selected_version or packages[index].latest
+                    packages[index].selected_version or packages[index].suggested_version
                 )
         return
 
 
-def _print_plan(console: Console, client: ComposerClient, commands: list) -> None:
-    console.print("\n[bold]Execution plan[/bold]")
+def _select_packages(
+    console: object,
+    packages: list[Package],
+    allow_major: bool,
+    release_service: ReleaseService,
+    composer_command: list[str],
+    dry_run_result: str | None = None,
+    with_all_dependencies: bool = False,
+    dry_run_with_all_dependencies: bool = False,
+) -> str | None:
+    if not sys.stdin.isatty():
+        _select_packages_with_prompts(console, packages, allow_major, release_service)
+        return None
+    from .tui import run_interactive_table
+
+    return run_interactive_table(
+        packages,
+        allow_major,
+        release_service,
+        composer_command,
+        dry_run_result,
+        with_all_dependencies,
+        dry_run_with_all_dependencies,
+    )
+
+
+def _print_plan(_: object, client: ComposerClient, commands: list) -> None:
+    print("\nExecution plan")
     for command in commands:
-        console.print(
-            f"- {command.description}: {' '.join([*client.base_command, *command.arguments])}"
-        )
+        print(f"- {command.description}: {' '.join([*client.base_command, *command.arguments])}")
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     if args.min_release_age < 0:
         parser().error("--min-release-age must be positive")
-    console = Console()
+    console = None
     directory = Path.cwd()
     try:
         client = ComposerClient(args.composer_command)
         client.validate_project(directory)
         packages = client.packages(directory, args.direct)
     except ComposerError as error:
-        console.print(f"Error: {error}", style="red")
+        print(f"Error: {error}", file=sys.stderr)
         return 2
 
     releases = ReleaseService()
@@ -275,34 +277,81 @@ def main(argv: list[str] | None = None) -> int:
                 args.minimum_release_age_exclude,
             )
         except HttpError as error:
-            console.print(f"Warning for {package.name}: {error}", style="yellow")
-        package.selected_version = choose_default(package, package.releases, args.major)
+            print(f"Warning for {package.name}: {error}", file=sys.stderr)
+        package.suggested_version = choose_default(package, package.releases, args.major)
+        package.selected_version = package.suggested_version if args.no_interaction else None
 
-    packages = [package for package in packages if package.selected_version]
+    packages = [package for package in packages if package.suggested_version]
     if not packages:
-        console.print("No eligible updates found.")
+        print("No eligible updates found.")
         return 0
     if args.no_interaction:
         print_packages(console, packages)
-        _print_plan(console, client, build_plan(packages, args.with_all_dependencies, args.dry_run))
+        _print_plan(console, client, build_plan(packages, False, False))
         return 0
+
+    if sys.stdin.isatty():
+        dry_run_result: str | None = None
+        with_all_dependencies = False
+        dry_run_with_all_dependencies = False
+        while True:
+            action = _select_packages(
+                console,
+                packages,
+                args.major,
+                releases,
+                client.base_command,
+                dry_run_result,
+                with_all_dependencies,
+                dry_run_with_all_dependencies,
+            )
+            with_all_dependencies = action.endswith("-all-dependencies") if action else False
+            if action in {"dry-run", "dry-run-all-dependencies"}:
+                commands = build_plan(packages, with_all_dependencies, True)
+                try:
+                    outputs = []
+                    for command in commands:
+                        result = client.execute(command, directory)
+                        outputs.append(f"{command.description}\n{result.stdout.strip()}")
+                    dry_run_result = "\n\n".join(outputs) or "Dry run completed without output."
+                except Exception as error:  # Keep the TUI available after every dry-run failure.
+                    dry_run_result = f"Dry run failed:\n{error}"
+                dry_run_with_all_dependencies = with_all_dependencies
+                continue
+            if action not in {"execute", "execute-all-dependencies"}:
+                return 0
+            commands = build_plan(packages, with_all_dependencies, False)
+            try:
+                for command in commands:
+                    result = client.execute(command, directory)
+                    print(result.stdout)
+            except ComposerError as error:
+                print(f"Composer failed: {error}", file=sys.stderr)
+                return 1
+            return 0
 
     while True:
         print_packages(console, packages)
-        _select_packages(console, packages, args.major, releases)
-        commands = build_plan(packages, args.with_all_dependencies, args.dry_run)
+        _select_packages(
+            console,
+            packages,
+            args.major,
+            releases,
+            client.base_command,
+        )
+        commands = build_plan(packages, False, False)
         _print_plan(console, client, commands)
         if not commands:
             return 0
-        if not Confirm.ask("Execute this plan?", default=False):
-            console.print("Plan not executed. Your selections are preserved.", style="yellow")
+        if input("Execute this plan? [y/N]: ").strip().lower() not in {"y", "yes"}:
+            print("Plan not executed. Your selections are preserved.")
             continue
         try:
             for command in commands:
                 result = client.execute(command, directory)
-                console.print(result.stdout)
+                print(result.stdout)
         except ComposerError as error:
-            console.print(f"Composer failed: {error}", style="red")
+            print(f"Composer failed: {error}", file=sys.stderr)
             return 1
         return 0
 

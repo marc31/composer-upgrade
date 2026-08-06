@@ -48,6 +48,13 @@ def test_rejects_missing_project_files(tmp_path: Path) -> None:
         ComposerClient().validate_project(tmp_path)
 
 
+def test_rejects_a_project_without_composer_lock(tmp_path: Path) -> None:
+    (tmp_path / "composer.json").write_text("{}")
+
+    with pytest.raises(ComposerError, match="composer.lock"):
+        ComposerClient().validate_project(tmp_path)
+
+
 def test_groups_compatible_and_major_commands() -> None:
     patch = Package(
         "vendor/patch", "1.0.0", "1.0.1", "^1", RequirementGroup.REQUIRE, selected_version="1.0.1"

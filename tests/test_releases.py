@@ -33,7 +33,14 @@ def test_reads_github_releases() -> None:
     client = JsonClient(
         transport_responses(
             {
-                "https://api.github.com/repos/org/repo/releases": b'[{"tag_name":"v2.0.0","published_at":"2026-01-02T00:00:00Z","body":"Breaking","html_url":"https://example.test/release"}]'
+                "https://api.github.com/repos/org/repo/releases?per_page=100&page=1": b'[{"tag_name":"v2.0.0","published_at":"2026-01-02T00:00:00Z","body":"Breaking","html_url":"https://example.test/release"}]',
+                (
+                    "https://api.github.com/repos/fruitcake/laravel-debugbar/"
+                    "releases?per_page=100&page=1"
+                ): (
+                    b'[{"tag_name":"v4.4.1","published_at":"2026-01-02T00:00:00Z",'
+                    b'"body":"Release notes","html_url":"https://example.test/release"}]'
+                ),
             }
         )
     )
@@ -42,6 +49,11 @@ def test_reads_github_releases() -> None:
 
     assert releases[0].version == "v2.0.0"
     assert releases[0].notes == "Breaking"
+
+    tree_releases = ReleaseService(client).changelog(
+        "https://github.com/fruitcake/laravel-debugbar/tree/v4.3.0"
+    )
+    assert tree_releases[0].version == "v4.4.1"
 
 
 def test_reads_gitlab_and_bitbucket_releases() -> None:

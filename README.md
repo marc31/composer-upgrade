@@ -22,20 +22,30 @@ point uv at the tool project:
 
 ```bash
 cd /path/to/composer-project
-uv --project /path/to/composer-upgrade run composer-upgrade --direct --dry-run
+uv --project /path/to/composer-upgrade run composer-upgrade --direct
 ```
 
 ## Usage
 
 ```bash
 composer-upgrade --direct --min-release-age 7 --major
-composer-upgrade --composer-command './vendor/bin/sail composer' --dry-run
+composer-upgrade --composer-command './vendor/bin/sail composer'
 composer-upgrade --no-interaction
 ```
 
-The main view lists eligible updates. Enter package numbers to select them, `info N` to view a package, or `version N` to choose a precise release. Before any mutation, the complete Composer plan is shown and requires confirmation.
+Use `--major` to show and select major upgrades. Without it, major releases remain hidden and cannot be selected.
 
-`--no-interaction` prints the report and plan but never runs Composer. `--dry-run` passes Composer's dry-run flag. `--minimum-release-age-exclude` accepts a package glob and can be repeated.
+The main view is a Textual keyboard interface:
+
+- Arrow keys move the active row; Enter or Space selects or deselects it.
+- `i` opens the changelog for the selected range and `v` opens the version picker.
+- The version picker includes a changelog URL and a comparison URL for every candidate release.
+- `s` opens the generated Composer commands in a separate plan window; `x` requests execution, `d` requests a Composer dry run, `w` toggles Composer's `--with-all-dependencies`, and `q` requests exit. Both execution actions require confirmation. After a dry run, its Composer output is shown over the main table; press `q` to close it and run the real plan with `x` if desired. In the exit confirmation, press `q`, Enter, or `y` to quit, and `n` to cancel.
+- In any secondary window, `q` closes only that window. Switching with `i` or `v` replaces the current secondary window, so one `q` returns to the main table.
+
+`--no-interaction` prints the report and plan but never runs Composer. `--minimum-release-age-exclude` accepts a package glob and can be repeated.
+
+Press `w` in the table to toggle Composer's `--with-all-dependencies` flag for generated commands. Its enabled or disabled state is shown in the plan, execution confirmation, and dry-run result. It can update transitive dependencies as needed to resolve the selected upgrades, so inspect the plan before confirming execution.
 
 ## Changelogs and API tokens
 
@@ -53,4 +63,4 @@ uv run ruff check
 uv run pytest
 ```
 
-See [docs/architecture.md](docs/architecture.md), [agent.md](agent.md), and [CONTRIBUTING.md](CONTRIBUTING.md).
+See [docs/architecture.md](docs/architecture.md), [agent.md](agent.md), [CONTRIBUTING.md](CONTRIBUTING.md), and the project skill at [skills/composer-upgrade/SKILL.md](skills/composer-upgrade/SKILL.md).

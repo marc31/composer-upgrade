@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from urllib.parse import quote
 
 from .http import HttpError, JsonClient
+from .links import repository_parts
 from .models import Release
 
 
@@ -36,7 +37,7 @@ class ReleaseService:
         ]
 
     def changelog(self, repository: str) -> list[Release]:
-        host, project = _repository_parts(repository)
+        host, project = repository_parts(repository)
         if host == "github.com":
             return self._github(project)
         if host == "gitlab.com":
@@ -48,8 +49,17 @@ class ReleaseService:
     def _github(self, project: str) -> list[Release]:
         token = os.getenv("GITHUB_TOKEN")
         headers = {"Authorization": f"Bearer {token}"} if token else {}
-        payload = self.client.get(f"https://api.github.com/repos/{project}/releases", headers)
-        return _forge_releases(payload, "tag_name", "published_at", "body", "html_url")
+        releases: list[Release] = []
+        page = 1
+        while True:
+            payload = self.client.get(
+                f"https://api.github.com/repos/{project}/releases?per_page=100&page={page}", headers
+            )
+            batch = _forge_releases(payload, "tag_name", "published_at", "body", "html_url")
+            releases.extend(batch)
+            if len(batch) < 100:
+                return releases
+            page += 1
 
     def _gitlab(self, project: str) -> list[Release]:
         token = os.getenv("GITLAB_TOKEN")
@@ -74,16 +84,6 @@ class ReleaseService:
             for item in values
             if isinstance(item, dict) and isinstance(item.get("name"), str)
         ]
-
-
-def _repository_parts(repository: str) -> tuple[str, str]:
-    normalized = repository.removesuffix(".git")
-    if normalized.startswith(("https://", "http://")):
-        normalized = normalized.split("://", 1)[1]
-    elif normalized.startswith("git@"):
-        normalized = normalized.removeprefix("git@").replace(":", "/", 1)
-    parts = normalized.split("/")
-    return (parts[0].lower(), "/".join(parts[1:])) if len(parts) >= 3 else ("", "")
 
 
 def _forge_releases(

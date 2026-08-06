@@ -1,0 +1,4 @@
+interface:
+  display_name: "Composer Upgrade"
+  short_description: "Build and test the Composer upgrade TUI"
+  default_prompt: "Use $composer-upgrade to modify and validate the Composer upgrade tool."

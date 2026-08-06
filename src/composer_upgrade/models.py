@@ -38,6 +38,7 @@ class Package:
     homepage: str | None = None
     releases: list[Release] = field(default_factory=list)
     selected_version: str | None = None
+    suggested_version: str | None = None
 
 
 @dataclass(frozen=True)
