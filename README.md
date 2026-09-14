@@ -5,9 +5,18 @@
 ## Install
 
 ```bash
-uv tool install composer-upgrade
+python -m pip install composer-upgrade
 composer-upgrade --help
 ```
+
+`uv` is optional. If you use it, install the command in an isolated environment:
+
+```bash
+uv tool install composer-upgrade
+```
+
+The command requires Python 3.11 or later, Composer available in your `PATH` (or specified
+with `--composer-command`), and an interactive terminal.
 
 For local development, install [uv](https://docs.astral.sh/uv/) and run:
 
