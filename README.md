@@ -49,10 +49,10 @@ The main view is a Textual keyboard interface:
 - Arrow keys move the active row; Enter or Space selects or deselects it.
 - `i` opens the changelog for the selected range and `v` opens the version picker.
 - The version picker includes a changelog URL and a comparison URL for every candidate release.
-- `s` opens the generated Composer commands in a separate plan window; `x` requests execution, `d` requests a Composer dry run, `w` toggles Composer's `--with-all-dependencies`, and `q` requests exit. Both execution actions require confirmation. After a dry run, its Composer output is shown over the main table; press `q` to close it and run the real plan with `x` if desired. In the exit confirmation, press `q`, Enter, or `y` to quit, and `n` to cancel.
+- `s` opens the generated Composer commands in a separate plan window; `x` requests execution, `d` requests a Composer dry run, `w` disables or re-enables Composer's `--with-all-dependencies`, and `q` requests exit. Both execution actions require confirmation. After a dry run, its Composer output is shown over the main table; press `q` to close it and run the real plan with `x` if desired. In the exit confirmation, press `q`, Enter, or `y` to quit, and `n` to cancel.
 - In any secondary window, `q` closes only that window. Switching with `i` or `v` replaces the current secondary window, so one `q` returns to the main table.
 
-Press `w` in the table to toggle Composer's `--with-all-dependencies` flag for generated commands. Its enabled or disabled state is shown in the plan, execution confirmation, and dry-run result. It can update transitive dependencies as needed to resolve the selected upgrades, so inspect the plan before confirming execution.
+Generated commands use Composer's `--with-all-dependencies` flag by default. Press `w` in the table to disable or re-enable it. Its state is shown in the plan, execution confirmation, and dry-run result. The flag lets Composer update transitive dependencies as needed to resolve the selected upgrades, so inspect the plan before confirming execution.
 
 ## Changelogs and API tokens
 

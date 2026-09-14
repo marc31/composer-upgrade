@@ -210,7 +210,7 @@ def _select_packages(
     release_service: ReleaseService,
     composer_command: list[str],
     dry_run_result: str | None = None,
-    with_all_dependencies: bool = False,
+    with_all_dependencies: bool = True,
     dry_run_with_all_dependencies: bool = False,
 ) -> str | None:
     if not sys.stdin.isatty():
@@ -262,7 +262,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if sys.stdin.isatty():
         dry_run_result: str | None = None
-        with_all_dependencies = False
+        with_all_dependencies = True
         dry_run_with_all_dependencies = False
         while True:
             action = _select_packages(

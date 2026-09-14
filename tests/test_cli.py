@@ -58,13 +58,14 @@ def test_dry_run_reopens_the_tui_with_its_output(monkeypatch: pytest.MonkeyPatch
 
         def execute(self, command: object, _: object) -> SimpleNamespace:
             assert "--dry-run" in command.arguments
+            assert "--with-all-dependencies" in command.arguments
             return SimpleNamespace(stdout="Dry run succeeded")
 
     class Releases:
         def packagist(self, _: str) -> list[Release]:
             return []
 
-    actions = iter(["dry-run", "quit"])
+    actions = iter(["dry-run-all-dependencies", "quit"])
 
     def select(*args: object) -> str:
         calls.append(args[5] if len(args) == 8 else None)
@@ -103,7 +104,7 @@ def test_dry_run_failure_reopens_the_tui(monkeypatch: pytest.MonkeyPatch) -> Non
         def packagist(self, _: str) -> list[Release]:
             return []
 
-    actions = iter(["dry-run", "quit"])
+    actions = iter(["dry-run-all-dependencies", "quit"])
 
     def select(*args: object) -> str:
         calls.append(args[5] if len(args) == 8 else None)

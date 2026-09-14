@@ -131,12 +131,12 @@ def test_dry_run_can_be_requested_from_the_table_or_execution_confirmation() -> 
             assert "--dry-run" in str(app.screen.query_one("#confirmation-message").render())
             await pilot.press("d")
             await pilot.pause()
-            assert app.return_value == "dry-run"
+            assert app.return_value == "dry-run-all-dependencies"
 
     asyncio.run(exercise())
 
 
-def test_all_dependencies_can_be_toggled_from_the_table() -> None:
+def test_all_dependencies_are_enabled_by_default_and_can_be_toggled() -> None:
     package = Package(
         "vendor/package",
         "1.0.0",
@@ -151,20 +151,22 @@ def test_all_dependencies_can_be_toggled_from_the_table() -> None:
     async def exercise() -> None:
         app = UpgradeTableApp([package], allow_major=False, releases=ReleaseService())
         async with app.run_test() as pilot:
-            await pilot.press("w")
             assert "--with-all-dependencies" in app._commands()[0].arguments
             await pilot.press("s")
             await pilot.pause()
             assert "enabled" in str(app.screen.query_one("#dependency-mode").render())
             await pilot.press("q")
             await pilot.pause()
-            await pilot.press("x")
-            await pilot.pause()
-            assert "enabled" in str(app.screen.query_one("#dependency-mode").render())
-            await pilot.press("q")
-            await pilot.pause()
             await pilot.press("w")
             assert "--with-all-dependencies" not in app._commands()[0].arguments
+            await pilot.press("s")
+            await pilot.pause()
+            assert "disabled" in str(app.screen.query_one("#dependency-mode").render())
+            await pilot.press("q")
+            await pilot.pause()
+            await pilot.press("x")
+            await pilot.pause()
+            assert "disabled" in str(app.screen.query_one("#dependency-mode").render())
 
     asyncio.run(exercise())
 

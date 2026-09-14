@@ -9,7 +9,7 @@ The CLI has four boundaries:
 
 Network and process access are injectable (`JsonClient` transport and `ComposerClient` runner), so tests do not contact external systems. Any failed optional release lookup emits a warning and leaves Composer's update discovery usable.
 
-The Textual table owns keyboard navigation. Its secondary changelog, version, plan, dry-run result, and confirmation screens intercept their own controls: `q` closes the current secondary screen, while `i` and `v` replace a secondary screen rather than stacking them. `--major` is applied when populating selectable version rows, not only when rendering the main table. The table owns dry runs (`d`) and the `--with-all-dependencies` toggle (`w`); the latter is shown in the plan, confirmation, and dry-run result, and is preserved when returning to the table after a dry run. Composer discovery defaults to direct dependencies; `--no-direct` expands it to transitive dependencies.
+The Textual table owns keyboard navigation. Its secondary changelog, version, plan, dry-run result, and confirmation screens intercept their own controls: `q` closes the current secondary screen, while `i` and `v` replace a secondary screen rather than stacking them. `--major` is applied when populating selectable version rows, not only when rendering the main table. The table owns dry runs (`d`) and the `--with-all-dependencies` toggle (`w`); the latter is enabled by default, shown in the plan, confirmation, and dry-run result, and is preserved when returning to the table after a dry run. Composer discovery defaults to direct dependencies; `--no-direct` expands it to transitive dependencies.
 
 ## Release process
 

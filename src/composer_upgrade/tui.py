@@ -343,7 +343,7 @@ class UpgradeTableApp(App[str | None]):
         packages: list[Package],
         allow_major: bool,
         releases: ReleaseService,
-        with_all_dependencies: bool = False,
+        with_all_dependencies: bool = True,
         composer_command: list[str] | None = None,
         dry_run_result: str | None = None,
         dry_run_with_all_dependencies: bool = False,
@@ -516,7 +516,7 @@ def run_interactive_table(
     releases: ReleaseService,
     composer_command: list[str],
     dry_run_result: str | None = None,
-    with_all_dependencies: bool = False,
+    with_all_dependencies: bool = True,
     dry_run_with_all_dependencies: bool = False,
 ) -> str | None:
     return UpgradeTableApp(
